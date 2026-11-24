@@ -64,3 +64,20 @@ S5. Comparison with E4 (SmolLM2-135M on Alpaca): shifts as a share of their prom
 ANALYSIS CODE
 experiments/analyse_e9.py, written and tested on made-up data before any E9 result exists.
 Output: results/e9_tests.txt.
+
+AMENDMENT, 2026-11-24, written BEFORE ANY E9 RESULT EXISTS (no E9 run has trained or produced results)
+Reason: three smoke tests trained nothing. In fp16 mixed precision every update was skipped,
+because TinyLlama's backward pass overflows: a one-step diagnostic (experiments/e9_diagnose.py)
+found 238 of 308 LoRA gradients non-finite even with no loss scaling, with either attention
+implementation and with or without gradient checkpointing, and none non-finite in full precision.
+Full-precision training is about 3.5 times slower, so the design is resized to fit the author's
+available GPU time. Changes:
+- Training runs in full precision (fp32); evaluation and answer generation stay in fp16, whose
+  forward pass is finite. Gradient checkpointing is kept.
+- Training uses the first 6,000 Dolly examples (188 updates in 1 epoch) instead of 12,000; the
+  held-out set is, as before, the next 1,000 examples after the training set (so examples
+  6,001-7,000 of the filtered, shuffled data).
+Everything else is unchanged: model, LoRA settings, learning rate and schedule, 32 answers per
+update, methods, seeds 300-303, 1,000 sampled answers, hypotheses H1 and H2, Holm correction,
+incomplete-run rule, expected sizes and secondary analyses. With fewer updates the shifts may be
+smaller than expected; any such outcome is reported as it comes.

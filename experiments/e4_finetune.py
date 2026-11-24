@@ -25,9 +25,10 @@ E7 (pre-registered equivalence test, results/e7_preregistration.txt) reuses this
 script: --tag e7 --methods global fixed --n-gen 1000 --seeds 100 ... 107.
 E8 (pre-registered small-batch test, results/e8_preregistration.txt):
 --tag e8 --methods global fixed --group 4 --lr 3.5e-5 --n-gen 1000 --seeds 200 ... 207.
-E9 (pre-registered scale test, results/e9_preregistration.txt): TinyLlama 1.1B with LoRA on Dolly:
---tag e9 --model TinyLlama/TinyLlama_v1.1 --dataset dolly --lora-r 16 --grad-ckpt --lr 2e-4
---epochs 1 --n-train 12000 --methods micro1 micro4 fixed --n-gen 1000 --seeds 300 301 302 303.
+E9 (pre-registered scale test, results/e9_preregistration.txt, with its 2026-11-24 amendment):
+TinyLlama 1.1B with LoRA on Dolly, trained in full precision:
+--tag e9 --model TinyLlama/TinyLlama_v1.1 --dataset dolly --lora-r 16 --grad-ckpt --train-fp32 --lr 2e-4
+--epochs 1 --n-train 6000 --methods micro1 micro4 fixed --n-gen 1000 --seeds 300 301 302 303.
 """
 import json
 import math
