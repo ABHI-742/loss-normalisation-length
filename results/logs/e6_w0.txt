@@ -1,0 +1,11 @@
+length law: mean 6.74, cv 0.97
+micro1 seed=0 learned mean=2.831 theory=2.831 (true 6.736) KL learned=0.4271 theory=0.4268 TV to theory=0.0028 to truth=0.3631 (142s)
+global seed=0 learned mean=6.540 theory=6.536 (true 6.736) KL learned=0.0008 theory=0.0005 TV to theory=0.0083 to truth=0.0125 (121s)
+micro1 seed=1 learned mean=2.838 theory=2.831 (true 6.736) KL learned=0.4246 theory=0.4268 TV to theory=0.0040 to truth=0.3597 (123s)
+global seed=1 learned mean=6.581 theory=6.536 (true 6.736) KL learned=0.0006 theory=0.0005 TV to theory=0.0083 to truth=0.0116 (125s)
+micro1 seed=2 learned mean=2.825 theory=2.831 (true 6.736) KL learned=0.4294 theory=0.4268 TV to theory=0.0049 to truth=0.3640 (125s)
+global seed=2 learned mean=6.517 theory=6.536 (true 6.736) KL learned=0.0011 theory=0.0005 TV to theory=0.0110 to truth=0.0152 (124s)
+micro1 seed=3 learned mean=2.823 theory=2.831 (true 6.736) KL learned=0.4300 theory=0.4268 TV to theory=0.0035 to truth=0.3637 (124s)
+global seed=3 learned mean=6.499 theory=6.536 (true 6.736) KL learned=0.0009 theory=0.0005 TV to theory=0.0058 to truth=0.0135 (125s)
+micro1 seed=4 learned mean=2.828 theory=2.831 (true 6.736) KL learned=0.4284 theory=0.4268 TV to theory=0.0031 to truth=0.3638 (125s)
+global seed=4 learned mean=6.514 theory=6.536 (true 6.736) KL learned=0.0009 theory=0.0005 TV to theory=0.0078 to truth=0.0135 (119s)

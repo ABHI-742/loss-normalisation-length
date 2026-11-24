@@ -1,0 +1,35 @@
+E8: pre-registered small-batch test, 4 answers per update (results/e8_preregistration.txt)
+complete seed pairs: 8 of 8 [200, 201, 202, 203, 204, 205, 206, 207]
+answers per update recorded in the results: [4]
+
+Per seed (fixed minus global):
+  seed  length %      loss
+   200    +12.41  +0.00084
+   201    +10.27  -0.00049
+   202    +10.17  -0.00024
+   203     +3.64  -0.00077
+   204     +5.18  +0.00132
+   205     +7.84  +0.00032
+   206     +3.37  -0.00006
+   207     +6.46  +0.00096
+
+PRIMARY
+  H1 (global shorter): mean D_len +7.42%, one-sided paired t = 6.31, df 7, p = 0.0002 -> PASS
+  CLAIM: at 4 answers per update the standard method shortens answers by 7.4% (90% interval 5.2 to 9.6%) relative to the constant divisor.
+
+SECONDARY (descriptive)
+  S1 global against fixed: -6.83% (90% interval -8.75 to -4.90%); share of the theory limit (-23.8%): 0.29; E4 micro4 was -6.3%
+  S2 held-out loss, fixed minus global: +0.00024 (95% interval -0.00039 to +0.00086)
+  S3 spread of gradient size: fixed 0.277, global 0.303 (-9%); fixed higher on 0 of 8 seeds (E7: +4%)
+  S4 per-prompt paired length difference (fixed minus global), and medians:
+    seed 200: +7.05 tokens (se 1.98); median fixed 45.0, global 42.0
+    seed 201: +5.98 tokens (se 1.76); median fixed 46.0, global 39.5
+    seed 202: +5.67 tokens (se 1.89); median fixed 46.0, global 35.0
+    seed 203: +2.22 tokens (se 2.08); median fixed 44.0, global 41.5
+    seed 204: +3.01 tokens (se 1.82); median fixed 42.0, global 39.0
+    seed 205: +4.67 tokens (se 1.99); median fixed 45.0, global 42.0
+    seed 206: +2.08 tokens (se 2.06); median fixed 43.5, global 41.0
+    seed 207: +3.93 tokens (se 1.97); median fixed 45.0, global 43.0
+  S5 batch size 4 (E8) against 32 (E7), mean generated length (Welch, unpaired):
+    fixed : B=4 63.32, B=32 62.50, difference +0.82 tokens, Welch p = 0.520
+    global: B=4 58.99, B=32 62.63, difference -3.64 tokens, Welch p = 0.011

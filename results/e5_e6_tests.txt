@@ -1,0 +1,43 @@
+E5: learning rate sweep
+  adam
+    scale 1.0    fixed - 0.5: +0.0019 [-0.0029, +0.0067] (n=5) | global - fixed: +0.0097 [+0.0095, +0.0099] (n=5) (theory +0.0096) | micro4 - fixed: +0.0903 [+0.0884, +0.0922] (n=5) (theory +0.0891)
+    scale 0.3333 fixed - 0.5: -0.0011 [-0.0029, +0.0008] (n=5) | global - fixed: +0.0095 [+0.0090, +0.0099] (n=5) (theory +0.0096) | micro4 - fixed: +0.0889 [+0.0874, +0.0904] (n=5) (theory +0.0891)
+    scale 0.1    fixed - 0.5: -0.0007 [-0.0015, +0.0001] (n=5) | global - fixed: +0.0096 [+0.0094, +0.0098] (n=5) (theory +0.0096) | micro4 - fixed: +0.0890 [+0.0881, +0.0898] (n=5) (theory +0.0891)
+    P1 global gap, scale 1 minus scale 1/10: +0.0001 [-0.0001, +0.0003] (n=5) -> PASS
+    P1 micro4 gap, scale 1 minus scale 1/10: +0.0013 [-0.0009, +0.0036] (n=5) -> INCONCLUSIVE
+    P2 offset shrink (scale 1 minus 1/10): +0.0026 [-0.0025, +0.0077] (n=5) one-sided p=0.12; offset at 1/10 -0.0007+/-0.0008 -> FAIL
+    fixed at scale 1/10, final step only, minus 0.5: -0.0004 [-0.0021, +0.0012] (n=5)
+  sgd
+    scale 1.0    fixed - 0.5: +0.0022 [-0.0013, +0.0057] (n=5) | global - fixed: +0.0096 [+0.0094, +0.0099] (n=5) (theory +0.0096) | micro4 - fixed: +0.0903 [+0.0884, +0.0922] (n=5) (theory +0.0891)
+    scale 0.3333 fixed - 0.5: -0.0015 [-0.0037, +0.0007] (n=5) | global - fixed: +0.0095 [+0.0091, +0.0099] (n=5) (theory +0.0096) | micro4 - fixed: +0.0892 [+0.0874, +0.0909] (n=5) (theory +0.0891)
+    scale 0.1    fixed - 0.5: -0.0007 [-0.0014, -0.0000] (n=5) | global - fixed: +0.0096 [+0.0095, +0.0098] (n=5) (theory +0.0096) | micro4 - fixed: +0.0889 [+0.0881, +0.0896] (n=5) (theory +0.0891)
+    P1 global gap, scale 1 minus scale 1/10: +0.0000 [-0.0002, +0.0002] (n=5) -> PASS
+    P1 micro4 gap, scale 1 minus scale 1/10: +0.0015 [-0.0010, +0.0039] (n=5) -> INCONCLUSIVE
+    P2 offset shrink (scale 1 minus 1/10): +0.0029 [-0.0009, +0.0067] (n=5) one-sided p=0.052; offset at 1/10 -0.0007+/-0.0007 -> FAIL
+    fixed at scale 1/10, final step only, minus 0.5: -0.0012 [-0.0039, +0.0015] (n=5)
+
+E5 POST-HOC EXTENSION (exploratory, not pre-registered; pre-registered P2 stays FAIL)
+  fixed divisor, seeds 0-4 from the main run plus seeds 5-14
+  adam: offset at scale 1 +0.0004 [-0.0015, +0.0024] (n=15); at 1/10 -0.0002 [-0.0007, +0.0004] (n=15)
+    shrink (1 minus 1/10) +0.0006 [-0.0016, +0.0028] (n=15) one-sided p=0.28 -> P2 rule not met
+    final step only at 1/10: +0.0001 [-0.0014, +0.0015] (n=15)
+  sgd: offset at scale 1 +0.0003 [-0.0016, +0.0022] (n=15); at 1/10 -0.0001 [-0.0007, +0.0005] (n=15)
+    shrink (1 minus 1/10) +0.0005 [-0.0017, +0.0026] (n=15) one-sided p=0.32 -> P2 rule not met
+    final step only at 1/10: -0.0011 [-0.0031, +0.0010] (n=15)
+
+E6: many lengths (1-32, coefficient of variation 0.97)
+  fixed learned mean - true mean: -0.0114 [-0.0462, +0.0233] (n=5)
+  micro1: learned mean 2.829 (theory 2.831)
+    P3 gap to fixed -3.8953 [-3.9229, -3.8678] (n=5) vs theory -3.904 -> PASS
+    total variation: to theory 0.0037, to truth 0.3629 -> P4 PASS
+    KL excess over fixed +0.4276 [+0.4249, +0.4302] (n=5) vs theory 0.4268 -> P5 PASS
+  micro4: learned mean 5.180 (theory 5.187)
+    P3 gap to fixed -1.5439 [-1.5678, -1.5201] (n=5) vs theory -1.549 -> PASS
+    total variation: to theory 0.0067, to truth 0.1055 -> P4 PASS
+    KL excess over fixed +0.0377 [+0.0363, +0.0392] (n=5) vs theory 0.0374 -> P5 PASS
+  global: learned mean 6.530 (theory 6.536)
+    P3 gap to fixed -0.1941 [-0.2055, -0.1826] (n=5) vs theory -0.200 -> PASS
+    total variation: to theory 0.0082, to truth 0.0133
+    KL excess over fixed +0.0005 [+0.0004, +0.0007] (n=5) vs theory 0.0005
+  micro1 learned vs theory chance of each length (first 12):
+    L1:0.468/0.468  L2:0.204/0.204  L3:0.106/0.107  L4:0.064/0.064  L5:0.041/0.041  L6:0.028/0.028  L7:0.019/0.019  L8:0.014/0.014  L9:0.011/0.011  L10:0.008/0.008  L11:0.007/0.006  L12:0.005/0.005

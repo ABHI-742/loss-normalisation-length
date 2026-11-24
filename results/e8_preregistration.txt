@@ -1,0 +1,66 @@
+E8 PRE-REGISTRATION: does the standard method drift at small batches, where the theory says it should?
+Written 2026-11-23, before any E8 run. Nothing in this file may change after the first E8 result exists;
+any later addition goes below a dated line marked "POST-HOC".
+
+PURPOSE
+The standard method (global: divide by the batch's total response tokens) is a ratio estimator whose
+bias shrinks roughly as 1/B, where B is the number of answers per update. At B = 32 (E4, E7) the bias
+was too small to see. E8 tests the theory's claim at B = 4: the standard method should shorten
+answers relative to the constant divisor (fixed), which is unbiased at every batch size.
+
+PREDICTION FROM THE THEORY (stated before the run)
+- Prompt-blind theory limit at B = 4: learned mean 43.9 against 57.6, i.e. -23.8%.
+- Real shifts were about 1/4 to 1/3 of the limit in E4 (consistent with the prompt-conditional
+  form, which scales the shift by E[Var(L | prompt)] / Var(L)).
+- The expected gradient of global at B = 4 is the same as that of micro4 in E4 (each normalises over
+  4 answers), and the settling point does not depend on step size or learning rate (theory T10,
+  E5 P1). So the shift should be close to E4's micro4 shift, -6.3% (2 seeds, not significant there).
+- Expected range: about -4% to -8% for global against fixed.
+
+SETUP (identical to E7 unless stated)
+- SmolLM2-135M, Alpaca, same 16,000 training and 1,000 held-out examples, prompt masked.
+- B = 4 answers per update (E7: 32). 2 epochs, so 8,000 updates.
+- Learning rate 3.5e-5 (square-root scaling from 1e-4 at B = 32, the usual rule for Adam), AdamW,
+  same warm-up (1/30 of updates) and cosine schedule, fp16. No gradient clipping.
+- Methods: global (weight 1/N per token) and fixed (weight 1/(B mu), mu = 57.61).
+- Seeds: 200, 201, 202, 203, 204, 205, 206, 207 (8 seeds). Within a seed both methods see the same
+  batch order and the same sampling seed, so each seed gives one paired difference.
+- 1,000 held-out prompts sampled per run (temperature 1, no top-k or top-p, at most 512 new
+  tokens), every answer length saved.
+
+PRIMARY ENDPOINT
+For each seed s:
+  D_len(s) = 100 x (mean generated length of fixed - that of global) / that of global   [percent]
+  (positive means global is shorter, as the theory predicts)
+
+H1: mean D_len > 0. One-sided paired t-test on the 8 seed differences, alpha 0.05
+    (t distribution with n-1 degrees of freedom). One test, so no multiplicity correction.
+
+Outcomes and wording:
+- H1 passes: "At 4 answers per update the standard method shortens answers by X% (interval) relative
+  to the constant divisor; the constant divisor's unbiasedness matters at small batches."
+- H1 fails: "No detectable drift at 4 answers per update (interval). In this setting the standard
+  method's bias stays negligible even at small batches, and the constant divisor's advantage
+  remains theoretical." The paper reports this as written.
+
+INCOMPLETE RUNS
+A crashed run is rerun with the same seed (the script resumes). Fewer than 6 complete seed pairs
+when Kaggle time or quota runs out: H1 is reported as INCOMPLETE, with the interval from the pairs
+that exist. No seeds beyond 200-207 are added.
+
+SECONDARY (descriptive, no pass/fail)
+S1. Size: mean shift of global against fixed, its 90% interval, its share of the theory limit
+    (-23.8%), and comparison with E4's micro4 shift (-6.3%).
+S2. Held-out token-mean loss, fixed minus global, mean and 95% interval. The theory gives two
+    opposite effects (global's bias cost against fixed's higher variance), so no direction is
+    predicted.
+S3. Step-to-step spread of gradient size (coefficient of variation), fixed against global;
+    expected higher for fixed, by more than the 4% seen in E7.
+S4. Per-prompt paired length differences, pooled within seed, and median lengths.
+S5. Batch-size check of unbiasedness: mean length of fixed at B = 4 (E8) against fixed at B = 32
+    (E7), and the same for global (different seeds and learning rates, so an unpaired Welch
+    comparison). The theory expects fixed to move less than global.
+
+ANALYSIS CODE
+experiments/analyse_e8.py, written and tested on made-up data before any E8 result exists.
+Output: results/e8_tests.txt.

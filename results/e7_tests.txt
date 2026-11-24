@@ -1,0 +1,32 @@
+E7: pre-registered equivalence test, fixed divisor against global (results/e7_preregistration.txt)
+complete seed pairs: 8 of 8 [100, 101, 102, 103, 104, 105, 106, 107]
+
+Per seed (fixed minus global):
+  seed      loss  length %
+   100  +0.00055     +0.70
+   101  -0.00020     -1.91
+   102  +0.00155     +2.36
+   103  +0.00074     -3.77
+   104  +0.00040     +5.93
+   105  +0.00052     -3.96
+   106  +0.00029     +1.28
+   107  +0.00028     -2.19
+
+PRIMARY (90% interval must lie inside the margin)
+  H1 loss: mean +0.00051, 90% interval [+0.00018, +0.00085], margin +/-0.001, TOST p = 0.0142 -> PASS
+  H2 len : mean -0.19%, 90% interval [-2.47, +2.08]%, margin +/-5.0%, TOST p = 0.0026 -> PASS
+  CLAIM: the fixed divisor performs on par with the standard method (equivalent within +/-0.001 loss and +/-5% length).
+
+SECONDARY (descriptive)
+  S1 direction: mean length difference -0.19% (global not shorter)
+  S2 per-prompt paired length difference (fixed minus global), and medians:
+    seed 100: +0.41 tokens (se 1.85, 1000 prompts); median fixed 41.0, global 43.0
+    seed 101: -1.18 tokens (se 1.96, 1000 prompts); median fixed 43.0, global 44.5
+    seed 102: +1.47 tokens (se 1.99, 1000 prompts); median fixed 43.0, global 47.0
+    seed 103: -2.36 tokens (se 1.82, 1000 prompts); median fixed 43.0, global 45.0
+    seed 104: +3.79 tokens (se 2.01, 1000 prompts); median fixed 49.0, global 45.0
+    seed 105: -2.70 tokens (se 2.18, 1000 prompts); median fixed 49.0, global 49.5
+    seed 106: +0.81 tokens (se 2.05, 1000 prompts); median fixed 43.5, global 46.0
+    seed 107: -1.31 tokens (se 1.52, 1000 prompts); median fixed 42.5, global 42.0
+  S3 step-to-step spread of gradient size (coefficient of variation): fixed 0.133, global 0.128; fixed higher on 7 of 8 seeds
+  S4 with E4 seeds 0 and 1 added (10 pairs, exploratory): loss [+0.00018, +0.00072] inside margin; length [-1.87, +1.73]% inside margin

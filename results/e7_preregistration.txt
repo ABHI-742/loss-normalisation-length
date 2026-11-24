@@ -1,0 +1,71 @@
+E7 PRE-REGISTRATION: is the fixed divisor on par with the standard token-count average?
+Written 2026-11-23, before any E7 run. Nothing in this file may change after the first E7 result exists;
+any later addition goes below a dated line marked "POST-HOC".
+
+PURPOSE
+The paper presents the fixed divisor as an alternative to the standard method (global: divide by the
+batch's total response tokens), not as a better one. E7 tests the claim "performs on par" as an
+equivalence, not as an absence of difference.
+
+WHAT IS ALREADY KNOWN (honest disclosure)
+The margins below were chosen after seeing E4 (2 seeds, exploratory), where fixed minus global was
+-0.0001 and -0.0003 in held-out loss and -0.73 and +1.32 tokens in mean length. E4's seeds (0, 1) are
+NOT reused. E7 uses fresh seeds and more generated answers.
+
+SETUP (identical to E4 unless stated)
+- Model SmolLM2-135M, Alpaca, same 16,000 training and 1,000 held-out examples (data order seed 0),
+  prompt masked, response plus end-of-text token carry the loss.
+- 32 answers per update, 2 epochs (1,000 updates), AdamW lr 1e-4 with warm-up and cosine decay, fp16.
+- No gradient clipping. (Under clipping the two methods coincide by theorem, as E2 and E4 showed;
+  the unclipped case is where they can differ.)
+- Methods: global (weight 1/N per token, N = response tokens in the batch) and
+  fixed (weight 1/(B mu), B = 32, mu = 57.61, the mean training response length).
+- Seeds: 100, 101, 102, 103, 104, 105, 106, 107 (8 seeds). Within a seed both methods see the
+  same batch order and the same sampling seed, so each seed gives one paired difference.
+- Changed from E4: answers are sampled for all 1,000 held-out prompts (E4 used 500), and every
+  answer's length is saved. Sampling: temperature 1, no top-k or top-p, at most 512 new tokens.
+
+PRIMARY ENDPOINTS (both must pass for the claim "on par")
+For each seed s:
+  D_loss(s) = held-out token-mean loss of fixed minus that of global
+  D_len(s)  = 100 x (mean generated length of fixed - that of global) / that of global   [percent]
+
+H1 (loss):   the 90% confidence interval of mean D_loss lies inside [-0.001, +0.001].
+             Margin reason: 0.001 nats per token is a 0.1% change in perplexity, about one
+             fourteenth of the cost of per-answer averaging seen in E4 (+0.014).
+H2 (length): the 90% confidence interval of mean D_len lies inside [-5%, +5%].
+             Margin reason: about 3 tokens per answer, and smaller than the shift caused by the
+             old gradient-accumulation bug in E4 (micro4, -6.3%).
+
+Test: two one-sided t-tests (TOST) at alpha 0.05 each, on the 8 paired seed differences
+(t distribution with n-1 degrees of freedom), which is the same as the 90% interval lying inside
+the margin. The claim needs H1 AND H2; requiring both (an intersection-union test) needs no
+multiplicity correction.
+
+Outcomes and wording:
+- both pass: "the fixed divisor performs on par with the standard method (equivalent within
+  +/-0.001 loss and +/-5% length)".
+- one passes: state only the passing one as equivalent; the other is reported as "equivalence
+  not shown", with its interval.
+- neither passes: report the intervals; the paper drops "on par" and says only what the
+  intervals show.
+
+INCOMPLETE RUNS
+If a run crashes, it is rerun with the same seed (the script resumes). If fewer than 6 complete
+seed pairs exist when Kaggle time or quota runs out, the primary tests are reported as
+INCOMPLETE together with the intervals from the pairs that exist. No seeds beyond 100-107 are
+added to rescue a result.
+
+SECONDARY (descriptive, no pass/fail)
+S1. Direction: the theory predicts global is slightly shorter (theory limit -2.9% for global,
+    real shifts in E4 were about 1/4 to 1/3 of their limits). Report mean D_len and its sign.
+S2. Per-prompt paired length differences, pooled within seed, and median lengths.
+S3. Variance cost of the fixed divisor: coefficient of variation of the per-step gradient norm,
+    fixed against global (the fixed divisor's gradient size moves with the batch's token count;
+    expected higher for fixed).
+S4. Sensitivity: H1 and H2 recomputed with E4's seeds 0 and 1 added (10 seeds), labelled
+    exploratory.
+
+ANALYSIS CODE
+experiments/analyse_e7.py, written and tested on made-up data before any E7 result exists.
+Output: results/e7_tests.txt.

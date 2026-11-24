@@ -1,0 +1,44 @@
+E4: SmolLM2-135M on Alpaca, 2 epochs, lr 1e-4, 16k training answers, 500 held-out generations per run
+seeds [0, 1]; training answer mean 57.6; held-out reference mean 60.6
+EXPLORATORY: not pre-registered. Two seeds only.
+approximate sampling error of a difference averaged over seeds: +/-2.5 tokens (1 se)
+
+1. Generated answer length, each method minus fixed on the same seed
+method          seed0    seed1     mean      z       %  theory %  share
+micro1         -11.44   -17.77   -14.60   -5.9  -22.7%    -69.2%   0.33
+micro4          -1.90    -6.23    -4.06   -1.6   -6.3%    -23.8%   0.26
+global          +0.73    -1.32    -0.29   -0.1   -0.5%     -2.9%   0.16
+gclip-fclip     +2.30    -3.07    -0.38   -0.2   -0.6%         -    -
+('theory %' assumes the prompt says nothing about length; 'share' = observed shift / theory limit)
+
+2. Median generated length
+  micro1        31.0   30.0
+  micro4        40.0   41.0
+  global        44.0   45.5
+  fixed         43.5   44.5
+  global_clip   44.5   47.5
+  fixed_clip    45.5   47.0
+
+3. Held-out token-mean loss (the objective the fixed divisor estimates without bias)
+  micro1       1.6840  1.6874   minus fixed: +0.0140  +0.0149
+  micro4       1.6701  1.6729   minus fixed: +0.0002  +0.0004
+  global       1.6698  1.6721   minus fixed: -0.0001  -0.0003
+  fixed        1.6699  1.6724   minus fixed: +0.0000  +0.0000
+  global_clip  1.6727  1.6749   minus fixed_clip: -0.0001  -0.0002
+  fixed_clip   1.6728  1.6750   minus fixed_clip: +0.0000  +0.0000
+
+4. Heavy clipping (Hugging Face default threshold 1.0)
+  fraction of steps with gradient norm above 1: min 0.998, max 1.000
+  seed 0: fixed_clip - global_clip: length -2.30, loss +0.00009
+  seed 1: fixed_clip - global_clip: length +3.07, loss +0.00018
+  seed 0: clipping cost to fixed (fixed_clip - fixed loss): +0.0029
+  seed 1: clipping cost to fixed (fixed_clip - fixed loss): +0.0026
+
+5. Gradient-norm growth power (alpha), for the length-aware clipping threshold
+  micro1       0.401  0.462
+  micro4       0.558  0.589
+  global       0.513  0.543
+  fixed        0.508  0.535
+  global_clip  0.511  0.540
+  fixed_clip   0.512  0.540
+  all runs: mean 0.518, range 0.401-0.589 (synthetic E2: 0.449)

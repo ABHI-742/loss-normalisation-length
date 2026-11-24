@@ -1,0 +1,8 @@
+adam lr=0.0003 steps=40000 fixed  seed=9 q=0.4988 end=0.4959 predicted=0.5000 (792s)
+adam lr=0.0003 steps=40000 fixed  seed=14 q=0.5005 end=0.5040 predicted=0.5000 (980s)
+sgd lr=0.05 steps=40000 fixed  seed=9 q=0.4991 end=0.4935 predicted=0.5000 (741s)
+sgd lr=0.05 steps=40000 fixed  seed=14 q=0.5011 end=0.5046 predicted=0.5000 (736s)
+adam lr=0.003 steps=4000 fixed  seed=9 q=0.5003 end=0.5085 predicted=0.5000 (101s)
+adam lr=0.003 steps=4000 fixed  seed=14 q=0.5003 end=0.5092 predicted=0.5000 (99s)
+sgd lr=0.5 steps=4000 fixed  seed=9 q=0.4999 end=0.5102 predicted=0.5000 (74s)
+sgd lr=0.5 steps=4000 fixed  seed=14 q=0.4998 end=0.5121 predicted=0.5000 (73s)

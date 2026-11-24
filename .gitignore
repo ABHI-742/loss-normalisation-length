@@ -1,0 +1,10 @@
+# Allow-list: only the code, results and README are public.
+# Planning notes, drafts, research notes, reports and the paper source stay local.
+/*
+!/.gitignore
+!/README.md
+!/experiments/
+!/results/
+
+__pycache__/
+*.pyc
