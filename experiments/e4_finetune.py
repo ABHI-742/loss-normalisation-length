@@ -262,7 +262,7 @@ def load_model(model_name, device, lora_r=0, grad_ckpt=False):
 
 def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=None, tag="e4", group=32,
          model_name=MODEL, dataset="alpaca", n_train=None, n_eval=None, lora_r=0, grad_ckpt=False,
-         init_scale=2.0 ** 16):
+         init_scale=2.0 ** 16, train_fp32=False):
     from transformers import AutoTokenizer
 
     global GROUP, INIT_SCALE
@@ -306,7 +306,10 @@ def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=No
             t0 = time.time()
             torch.manual_seed(seed)
             model = load_model(model_name, device, lora_r, grad_ckpt)
-            grads, over_one, norm_cv = train(model, method, seed, train_ex, mu, epochs, lr, device, eos, use_amp)
+            # train_fp32: full-precision training (TinyLlama's fp16 backward overflows); evaluation and
+            # generation below stay in fp16, whose forward pass is finite
+            grads, over_one, norm_cv = train(model, method, seed, train_ex, mu, epochs, lr, device, eos,
+                                             use_amp and not train_fp32)
             loss = eval_loss(model, eval_ex, device, eos, use_amp)
             if grad_ckpt:
                 model.config.use_cache = True  # fast generation; checkpointing only matters in training
@@ -318,7 +321,7 @@ def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=No
                    "censored": cens, "n_gen": len(gen), "eval_loss": loss,
                    "theory_upper_limit": pred.get(method.replace("_clip", "")) if not method.endswith("_clip") else None,
                    "growth_power": growth_power(grads), "frac_norm_over_1": over_one,
-                   "norm_cv": norm_cv, **TRAIN_STATS, "init_scale": INIT_SCALE,
+                   "norm_cv": norm_cv, **TRAIN_STATS, "init_scale": INIT_SCALE, "train_fp32": train_fp32,
                    "minutes": (time.time() - t0) / 60, "gen_lengths": gen}
             with out.open("a") as f:
                 f.write(json.dumps(row) + "\n")
@@ -431,6 +434,8 @@ if __name__ == "__main__":
     ap.add_argument("--grad-ckpt", action="store_true", help="gradient checkpointing (saves GPU memory)")
     ap.add_argument("--init-scale", type=float, default=2.0 ** 16,
                     help="starting fp16 loss scale (PyTorch default 65536; lower avoids skipped first updates)")
+    ap.add_argument("--train-fp32", action="store_true",
+                    help="train in full precision (evaluation and generation stay fp16)")
     a = ap.parse_args()
     methods = tuple(a.methods)
     # settings beyond E4's, passed unchanged to each GPU process
@@ -442,6 +447,8 @@ if __name__ == "__main__":
         extra += ["--n-eval", str(a.n_eval)]
     if a.grad_ckpt:
         extra.append("--grad-ckpt")
+    if a.train_fp32:
+        extra.append("--train-fp32")
     if a.merge:
         merge(a.tag, a.seeds, methods)
     elif a.parallel:
@@ -450,4 +457,4 @@ if __name__ == "__main__":
         main(smoke=a.smoke, seeds=tuple(a.seeds), methods=methods, n_gen=a.n_gen, tag=a.tag,
              group=a.group, lr=a.lr, epochs=a.epochs, model_name=a.model, dataset=a.dataset,
              n_train=a.n_train, n_eval=a.n_eval, lora_r=a.lora_r, grad_ckpt=a.grad_ckpt,
-             init_scale=a.init_scale)
+             init_scale=a.init_scale, train_fp32=a.train_fp32)
