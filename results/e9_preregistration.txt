@@ -1,0 +1,66 @@
+E9 PRE-REGISTRATION: does the length bias hold for a 1B model on a different dataset?
+Written 2026-11-24, before any E9 run. Nothing in this file may change after the first E9 result exists;
+any later addition goes below a dated line marked "POST-HOC".
+
+PURPOSE
+E4, E7 and E8 used one small model (SmolLM2-135M) and one dataset (Alpaca). E9 tests whether the
+predicted shortening under per-answer and small-group averaging holds for a model about eight
+times larger, from a different family, on a different instruction dataset.
+
+SETUP
+- Model: TinyLlama/TinyLlama_v1.1 (1.1B parameters, Llama 2 architecture and tokenizer, Apache-2.0).
+- Data: databricks/databricks-dolly-15k (CC BY-SA 3.0), shuffled with seed 0. Prompt in the Alpaca
+  format, with the context field (if any) as the input; prompt masked; the response plus one
+  end-of-text token carry the loss. Examples with more than 512 tokens in total are skipped.
+  The first 12,000 remaining examples are used for training and the next 1,000 are held out.
+- Fine-tuning with LoRA adapters (rank 16, alpha 32, no dropout) on all attention and MLP
+  projection matrices; the base weights are frozen. Reason: full fine-tuning with AdamW does not
+  fit in the 16 GB of one T4 GPU. The theory does not depend on how the parameters are updated.
+- 32 answers per update, 1 epoch (375 updates), AdamW learning rate 2e-4, no weight decay, warm-up
+  over the first 1/30 of updates, cosine decay to 10%, fp16 mixed precision, gradient
+  checkpointing, no gradient clipping.
+- Methods: per-answer (micro1), micro-4 (micro4), constant divisor (fixed). By Theorem 1, micro-4
+  has the same expected gradient as the global average with 4 answers per update.
+- Seeds: 300, 301, 302, 303 (4 seeds). Within a seed all methods share the data order and the
+  sampling seed.
+- 1,000 held-out prompts sampled per run (temperature 1, no top-k or top-p, at most 512 new
+  tokens); every answer length is saved.
+
+PRIMARY ENDPOINTS
+For each seed s and method m in {micro1, micro4}:
+  D_m(s) = 100 x (mean generated length of fixed - that of m) / that of m     [percent]
+  (positive means method m gives shorter answers, as the theory predicts)
+
+H1: mean D_micro1 > 0.   H2: mean D_micro4 > 0.
+Each is a one-sided paired t-test over the seeds (t distribution with n-1 degrees of freedom).
+The two p-values are Holm-corrected; each hypothesis passes if its Holm-adjusted p < 0.05.
+
+Wording of outcomes:
+- pass: "With a 1.1B model on Dolly, <method> shortens answers by X% (interval) relative to the
+  constant divisor."
+- fail: "No detectable shortening under <method> with a 1.1B model on Dolly (interval)."
+  Reported as written.
+
+INCOMPLETE RUNS
+A crashed run, or one stopped by Kaggle time or quota limits, is rerun with the same seed (the
+script resumes, including in a later week). If fewer than 3 complete seed pairs exist for a
+comparison when the experiment is closed, that hypothesis is reported as INCOMPLETE, with the
+interval from the pairs that exist. No seeds beyond 300-303 are added.
+
+EXPECTED SIZE (stated before the run; descriptive, not tested)
+For Dolly, E0's prompt-blind limits are -73% (per-answer) and -33% (groups of 4). In E4 the real
+shifts were about 1/4 to 1/3 of their limits. Expected: per-answer about -15% to -30%, micro-4
+about -5% to -15%, both relative to the constant divisor.
+
+SECONDARY (descriptive, no pass/fail)
+S1. Size: the shifts relative to the constant divisor, their 90% intervals, and their share of the
+    prompt-blind limits computed from the training answers.
+S2. Held-out token-mean loss, each method minus fixed, mean and 95% interval.
+S3. Clipping regime at this scale: share of updates whose gradient norm exceeds 1, and the
+    gradient-growth exponent alpha.
+S4. Per-prompt paired length differences and medians.
+S5. Comparison with E4 (SmolLM2-135M on Alpaca): shifts as a share of their prompt-blind limits.
+
+ANALYSIS CODE
+experiments/analyse_e9.py, written and tested on made-up data before any E9 result exists.
+Output: results/e9_tests.txt.

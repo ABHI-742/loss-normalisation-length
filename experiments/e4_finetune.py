@@ -25,6 +25,9 @@ E7 (pre-registered equivalence test, results/e7_preregistration.txt) reuses this
 script: --tag e7 --methods global fixed --n-gen 1000 --seeds 100 ... 107.
 E8 (pre-registered small-batch test, results/e8_preregistration.txt):
 --tag e8 --methods global fixed --group 4 --lr 3.5e-5 --n-gen 1000 --seeds 200 ... 207.
+E9 (pre-registered scale test, results/e9_preregistration.txt): TinyLlama 1.1B with LoRA on Dolly:
+--tag e9 --model TinyLlama/TinyLlama_v1.1 --dataset dolly --lora-r 16 --grad-ckpt --lr 2e-4
+--epochs 1 --n-train 12000 --methods micro1 micro4 fixed --n-gen 1000 --seeds 300 301 302 303.
 """
 import json
 import math
@@ -52,16 +55,33 @@ def format_prompt(r):
     return f"### Instruction:\n{r['instruction']}\n\n### Response:\n"
 
 
-def build_data(tok, n_train, n_eval, seed=0):
+DATASETS = {
+    # name: (hub id, field for the optional input, field for the response)
+    "alpaca": ("tatsu-lab/alpaca", "input", "output"),
+    "dolly": ("databricks/databricks-dolly-15k", "context", "response"),
+}
+
+
+def response_ids(tok, text):
+    """Token ids of a response, without a start-of-text token (Llama tokenizers add one)."""
+    ids = tok(text)["input_ids"]
+    if tok.bos_token_id is not None and ids and ids[0] == tok.bos_token_id:
+        ids = ids[1:]
+    return ids
+
+
+def build_data(tok, n_train, n_eval, seed=0, dataset="alpaca"):
     from datasets import load_dataset
 
-    ds = load_dataset("tatsu-lab/alpaca", split="train").shuffle(seed=seed)
+    hub_id, input_field, output_field = DATASETS[dataset]
+    ds = load_dataset(hub_id, split="train").shuffle(seed=seed)
     examples = []
-    for r in ds:
+    for row in ds:
+        r = {"instruction": row["instruction"], "input": row[input_field], "output": row[output_field]}
         if not r["output"].strip():
             continue
         p = tok(format_prompt(r))["input_ids"]
-        y = tok(r["output"])["input_ids"] + [tok.eos_token_id]
+        y = response_ids(tok, r["output"]) + [tok.eos_token_id]
         if len(p) + len(y) > MAX_TOTAL:
             continue
         examples.append((p, y))
@@ -207,21 +227,44 @@ def sample_lengths(model, ex, device, eos_id, seed, max_new, use_amp, batch_size
     return lengths, censored
 
 
-def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=None, tag="e4", group=32):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+
+
+def load_model(model_name, device, lora_r=0, grad_ckpt=False):
+    """Full fine-tuning (lora_r=0, as in E4/E7/E8) or LoRA adapters on all projection matrices."""
+    from transformers import AutoModelForCausalLM
+
+    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float32)
+    if grad_ckpt:
+        model.gradient_checkpointing_enable()
+        model.config.use_cache = False
+        model.enable_input_require_grads()
+    if lora_r:
+        from peft import LoraConfig, get_peft_model
+
+        cfg = LoraConfig(r=lora_r, lora_alpha=2 * lora_r, lora_dropout=0.0,
+                         target_modules=LORA_TARGETS, task_type="CAUSAL_LM")
+        model = get_peft_model(model, cfg)
+    return model.to(device)
+
+
+def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=None, tag="e4", group=32,
+         model_name=MODEL, dataset="alpaca", n_train=None, n_eval=None, lora_r=0, grad_ckpt=False):
+    from transformers import AutoTokenizer
 
     global GROUP
     GROUP = group  # answers per update; train() and theory_mean() read it
 
     device = "cuda"
     use_amp = True
-    tok = AutoTokenizer.from_pretrained(MODEL)
+    tok = AutoTokenizer.from_pretrained(model_name)
     eos = tok.eos_token_id
-    n_train, n_eval, default_gen = (256, 64, 32) if smoke else (16000, 1000, 500)
-    n_gen = default_gen if smoke or n_gen is None else min(n_gen, n_eval)
     if smoke:
-        epochs = 1
-    train_ex, eval_ex = build_data(tok, n_train, n_eval)
+        n_train, n_eval, n_gen, epochs = 256, 64, 32, 1
+    else:
+        n_train, n_eval = n_train or 16000, n_eval or 1000
+        n_gen = 500 if n_gen is None else min(n_gen, n_eval)
+    train_ex, eval_ex = build_data(tok, n_train, n_eval, dataset=dataset)
     train_len = [len(y) for _, y in train_ex]
     ref_len = [len(y) for _, y in eval_ex[:n_gen]]
     mu = float(np.mean(train_len))
@@ -248,11 +291,14 @@ def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=No
                 continue
             t0 = time.time()
             torch.manual_seed(seed)
-            model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.float32).to(device)
+            model = load_model(model_name, device, lora_r, grad_ckpt)
             grads, over_one, norm_cv = train(model, method, seed, train_ex, mu, epochs, lr, device, eos, use_amp)
             loss = eval_loss(model, eval_ex, device, eos, use_amp)
+            if grad_ckpt:
+                model.config.use_cache = True  # fast generation; checkpointing only matters in training
             gen, cens = sample_lengths(model, eval_ex[:n_gen], device, eos, seed, MAX_TOTAL, use_amp)
             row = {"method": method, "seed": seed, "epochs": epochs, "lr": lr, "group": GROUP,
+                   "model": model_name, "dataset": dataset, "lora_r": lora_r, "n_train": len(train_ex),
                    "train_mean_len": mu, "ref_mean_len": float(np.mean(ref_len)),
                    "gen_mean_len": float(np.mean(gen)), "gen_median_len": float(np.median(gen)),
                    "censored": cens, "n_gen": len(gen), "eval_loss": loss,
@@ -305,7 +351,8 @@ def merge(tag="e4", seeds=(0, 1), methods=METHODS):
     return rows
 
 
-def run_parallel(seeds, n_gpus=None, child_cmd=None, methods=METHODS, n_gen=None, tag="e4", group=32, lr=1e-4):
+def run_parallel(seeds, n_gpus=None, child_cmd=None, methods=METHODS, n_gen=None, tag="e4", group=32, lr=1e-4,
+                 extra=()):
     """Run the seeds side by side, one process per GPU, streaming each process's output
     with a [gpuN] prefix, then merge. child_cmd(seeds) overrides the command (for tests)."""
     import subprocess
@@ -324,6 +371,7 @@ def run_parallel(seeds, n_gpus=None, child_cmd=None, methods=METHODS, n_gen=None
                    "--methods", *methods, "--tag", tag, "--group", str(group), "--lr", repr(lr)]
             if n_gen is not None:
                 cmd += ["--n-gen", str(n_gen)]
+            cmd += list(extra)
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu), PYTHONUNBUFFERED="1")
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
 
@@ -358,12 +406,28 @@ if __name__ == "__main__":
     ap.add_argument("--tag", default="e4", help="prefix of the result files (e4, e7, e8)")
     ap.add_argument("--group", type=int, default=32, help="answers per update (default 32)")
     ap.add_argument("--lr", type=float, default=1e-4)
+    ap.add_argument("--epochs", type=int, default=2)
+    ap.add_argument("--model", default=MODEL, help="Hugging Face model id (default SmolLM2-135M)")
+    ap.add_argument("--dataset", choices=sorted(DATASETS), default="alpaca")
+    ap.add_argument("--n-train", type=int, default=None, help="training examples (default 16000)")
+    ap.add_argument("--n-eval", type=int, default=None, help="held-out examples (default 1000)")
+    ap.add_argument("--lora-r", type=int, default=0, help="LoRA rank; 0 means full fine-tuning")
+    ap.add_argument("--grad-ckpt", action="store_true", help="gradient checkpointing (saves GPU memory)")
     a = ap.parse_args()
     methods = tuple(a.methods)
+    # settings beyond E4's, passed unchanged to each GPU process
+    extra = ["--epochs", str(a.epochs), "--model", a.model, "--dataset", a.dataset, "--lora-r", str(a.lora_r)]
+    if a.n_train:
+        extra += ["--n-train", str(a.n_train)]
+    if a.n_eval:
+        extra += ["--n-eval", str(a.n_eval)]
+    if a.grad_ckpt:
+        extra.append("--grad-ckpt")
     if a.merge:
         merge(a.tag, a.seeds, methods)
     elif a.parallel:
-        run_parallel(a.seeds, methods=methods, n_gen=a.n_gen, tag=a.tag, group=a.group, lr=a.lr)
+        run_parallel(a.seeds, methods=methods, n_gen=a.n_gen, tag=a.tag, group=a.group, lr=a.lr, extra=extra)
     else:
         main(smoke=a.smoke, seeds=tuple(a.seeds), methods=methods, n_gen=a.n_gen, tag=a.tag,
-             group=a.group, lr=a.lr)
+             group=a.group, lr=a.lr, epochs=a.epochs, model_name=a.model, dataset=a.dataset,
+             n_train=a.n_train, n_eval=a.n_eval, lora_r=a.lora_r, grad_ckpt=a.grad_ckpt)
