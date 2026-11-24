@@ -144,11 +144,16 @@ def growth_power(grads):
     return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx if sxx > 0 else None
 
 
+INIT_SCALE = 2.0 ** 16  # PyTorch's default starting loss scale for fp16; E9 uses a lower one
+TRAIN_STATS = {}  # filled by train(): updates, skipped (non-finite) updates, first finite update
+
+
 def train(model, method, seed, train_ex, mu, epochs, lr, device, pad_id, use_amp):
     rng = random.Random(seed)
     params = [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(params, lr=lr, weight_decay=0.0)
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    scaler = torch.amp.GradScaler("cuda", init_scale=INIT_SCALE, enabled=use_amp)
+    updates, skipped, first_finite = 0, 0, None
     n_groups = len(train_ex) // GROUP
     total = epochs * n_groups
     warm = max(1, total // 30)
@@ -171,6 +176,11 @@ def train(model, method, seed, train_ex, mu, epochs, lr, device, pad_id, use_amp
                 scaler.scale((dl * w[c:c + CHUNK].to(device)).sum()).backward()
             scaler.unscale_(opt)
             norm = float(torch.nn.utils.clip_grad_norm_(params, float("inf")))
+            updates += 1
+            if not math.isfinite(norm):
+                skipped += 1  # the gradient scaler skips this update and halves its scale
+            elif first_finite is None:
+                first_finite = updates
             if math.isfinite(norm):
                 # gradient size of the unnormalised summed gradient, for the growth power
                 scale = 1.0 / float(w.mean())
@@ -185,6 +195,8 @@ def train(model, method, seed, train_ex, mu, epochs, lr, device, pad_id, use_amp
             sched.step()
     # spread of the actual (normalised) gradient size from step to step
     norm_cv = float(np.std(norms) / np.mean(norms)) if norms else None
+    TRAIN_STATS.clear()
+    TRAIN_STATS.update(updates=updates, skipped_updates=skipped, first_finite_update=first_finite)
     return grads, over_one / max(1, steps), norm_cv
 
 
@@ -249,11 +261,13 @@ def load_model(model_name, device, lora_r=0, grad_ckpt=False):
 
 
 def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=None, tag="e4", group=32,
-         model_name=MODEL, dataset="alpaca", n_train=None, n_eval=None, lora_r=0, grad_ckpt=False):
+         model_name=MODEL, dataset="alpaca", n_train=None, n_eval=None, lora_r=0, grad_ckpt=False,
+         init_scale=2.0 ** 16):
     from transformers import AutoTokenizer
 
-    global GROUP
+    global GROUP, INIT_SCALE
     GROUP = group  # answers per update; train() and theory_mean() read it
+    INIT_SCALE = init_scale
 
     device = "cuda"
     use_amp = True
@@ -304,7 +318,8 @@ def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=No
                    "censored": cens, "n_gen": len(gen), "eval_loss": loss,
                    "theory_upper_limit": pred.get(method.replace("_clip", "")) if not method.endswith("_clip") else None,
                    "growth_power": growth_power(grads), "frac_norm_over_1": over_one,
-                   "norm_cv": norm_cv, "minutes": (time.time() - t0) / 60, "gen_lengths": gen}
+                   "norm_cv": norm_cv, **TRAIN_STATS, "init_scale": INIT_SCALE,
+                   "minutes": (time.time() - t0) / 60, "gen_lengths": gen}
             with out.open("a") as f:
                 f.write(json.dumps(row) + "\n")
             # Also print the row: the log of a committed version is kept even if the
@@ -312,7 +327,8 @@ def main(smoke=False, seeds=(0, 1), epochs=2, lr=1e-4, methods=METHODS, n_gen=No
             print("RESULT " + json.dumps(row), flush=True)
             print(f"{method:11s} seed={seed} generated mean={row['gen_mean_len']:.1f} "
                   f"(reference {row['ref_mean_len']:.1f}, censored {cens}) eval loss={loss:.4f} "
-                  f"alpha={row['growth_power']} |g|>1 on {100 * over_one:.0f}% of steps "
+                  f"alpha={row['growth_power']} |g|>1 on {100 * over_one:.0f}% of steps; "
+                  f"skipped {row.get('skipped_updates')} of {row.get('updates')} updates "
                   f"({row['minutes']:.1f} min)", flush=True)
             del model
             torch.cuda.empty_cache()
@@ -413,10 +429,13 @@ if __name__ == "__main__":
     ap.add_argument("--n-eval", type=int, default=None, help="held-out examples (default 1000)")
     ap.add_argument("--lora-r", type=int, default=0, help="LoRA rank; 0 means full fine-tuning")
     ap.add_argument("--grad-ckpt", action="store_true", help="gradient checkpointing (saves GPU memory)")
+    ap.add_argument("--init-scale", type=float, default=2.0 ** 16,
+                    help="starting fp16 loss scale (PyTorch default 65536; lower avoids skipped first updates)")
     a = ap.parse_args()
     methods = tuple(a.methods)
     # settings beyond E4's, passed unchanged to each GPU process
-    extra = ["--epochs", str(a.epochs), "--model", a.model, "--dataset", a.dataset, "--lora-r", str(a.lora_r)]
+    extra = ["--epochs", str(a.epochs), "--model", a.model, "--dataset", a.dataset, "--lora-r", str(a.lora_r),
+             "--init-scale", repr(a.init_scale)]
     if a.n_train:
         extra += ["--n-train", str(a.n_train)]
     if a.n_eval:
@@ -430,4 +449,5 @@ if __name__ == "__main__":
     else:
         main(smoke=a.smoke, seeds=tuple(a.seeds), methods=methods, n_gen=a.n_gen, tag=a.tag,
              group=a.group, lr=a.lr, epochs=a.epochs, model_name=a.model, dataset=a.dataset,
-             n_train=a.n_train, n_eval=a.n_eval, lora_r=a.lora_r, grad_ckpt=a.grad_ckpt)
+             n_train=a.n_train, n_eval=a.n_eval, lora_r=a.lora_r, grad_ckpt=a.grad_ckpt,
+             init_scale=a.init_scale)
