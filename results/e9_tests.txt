@@ -1,0 +1,30 @@
+E9: pre-registered scale test, TinyLlama 1.1B with LoRA on Dolly (results/e9_preregistration.txt)
+model TinyLlama/TinyLlama_v1.1, dataset dolly, LoRA rank 16, training answers 6000, mean length 75.1
+
+Per seed, D = 100 x (fixed - method) / method (positive = method shorter):
+  micro1  300: +77.57  301: +70.65  302: +64.87  303: +80.58
+  micro4  300: +17.96  301: +13.24  302: +15.16  303: +25.35
+
+PRIMARY (one-sided paired t-tests, Holm-corrected over H1 and H2)
+  H1 micro1 shorter than fixed: mean D +73.42%, t = 20.83, df 3, p = 0.0001, Holm p = 0.0002, 4 seed pairs -> PASS
+  H2 micro4 shorter than fixed: mean D +17.93%, t = 6.75, df 3, p = 0.0033, Holm p = 0.0033, 4 seed pairs -> PASS
+
+SECONDARY (descriptive)
+  S1 shift relative to the constant divisor, and share of the prompt-blind limit:
+    micro1  -42.26% (90% interval -45.05 to -39.48); prompt-blind limit -68.4%; share 0.62
+    micro4  -15.08% (90% interval -19.46 to -10.70); prompt-blind limit -24.8%; share 0.61
+  S2 held-out loss, method minus fixed (95% interval):
+    micro1  +0.01870 (+0.01543 to +0.02197)
+    micro4  +0.00280 (+0.00179 to +0.00381)
+  S3 share of updates with adapter-gradient norm above 1: 0.005 to 0.439
+     growth exponent alpha: -0.064 to 0.729 (mean 0.349)
+  S4 per-prompt paired length difference (fixed minus method), and medians:
+    micro1  seed 300: +40.56 tokens (se 3.61); median fixed 57.0, micro1 26.0
+    micro1  seed 301: +38.74 tokens (se 3.51); median fixed 59.5, micro1 30.0
+    micro1  seed 302: +31.63 tokens (se 3.24); median fixed 47.0, micro1 26.0
+    micro1  seed 303: +39.59 tokens (se 3.46); median fixed 52.0, micro1 26.0
+    micro4  seed 300: +14.14 tokens (se 3.76); median fixed 57.0, micro4 47.0
+    micro4  seed 301: +10.94 tokens (se 3.67); median fixed 59.5, micro4 52.0
+    micro4  seed 302: +10.58 tokens (se 3.68); median fixed 47.0, micro4 41.0
+    micro4  seed 303: +17.94 tokens (se 3.42); median fixed 52.0, micro4 44.0
+  S5 E4 (SmolLM2-135M, Alpaca) for comparison: micro1 -22.5% of limit -69.2% (share 0.33); micro4 -6.2% of limit -23.8% (share 0.26)

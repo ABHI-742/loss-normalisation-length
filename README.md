@@ -18,12 +18,14 @@ results on clipping and on a constant divisor.
 | `experiments/e5_learning_rate.py` | E5 (pre-registered): learning-rate sweep, plus the exploratory 15-seed extension |
 | `experiments/e6_many_lengths.py` | E6 (pre-registered): lengths 1–32, full learned distribution and held-out cost |
 | `experiments/e0_lengths.py`, `e0_lengths_kaggle.ipynb` | E0: prompt-blind limits for Alpaca, Dolly, GSM8K and UltraChat |
-| `experiments/e4_finetune.py` | Fine-tuning SmolLM2-135M on Alpaca. Used for E4, and with flags for E7 and E8 (below) |
+| `experiments/e4_finetune.py` | Fine-tuning SmolLM2-135M on Alpaca. Used for E4, and with flags for E7, E8 and E9 (below) |
 | `experiments/e4_finetune_kaggle.ipynb`, `e7_equivalence_kaggle.ipynb`, `e8_small_batch_kaggle.ipynb` | Kaggle notebooks (2 × T4) that ran E4, E7 and E8 |
+| `experiments/e9_scale_kaggle.ipynb` | Kaggle notebook that ran E9 (TinyLlama-1.1B with LoRA on Dolly) |
+| `experiments/e9_diagnose.py` | One-step gradient check that showed fp16 training of TinyLlama overflows (reason for E9's amendment) |
 | `experiments/analyse_*.py` | Analysis scripts; each writes `results/*_tests.txt` |
 | `results/*.jsonl`, `results/e0_lengths.json` | Raw per-run results |
 | `results/*_tests.txt` | Analysis outputs quoted in the paper |
-| `results/*_preregistration.txt` | Pre-registrations, written before the runs of E5/E6, E7 and E8 |
+| `results/*_preregistration.txt` | Pre-registrations, written before the runs of E5/E6, E7, E8 and E9 |
 | `results/logs/` | Console logs of the synthetic runs |
 
 ## Reproducing
@@ -41,7 +43,7 @@ python experiments/analyse_e5_e6.py
 
 Each script has `--help`. E5 and E6 can be split across workers (`--worker`, `--workers`).
 
-**Fine-tuning experiments (GPU).** Run the notebooks on Kaggle with two T4 GPUs and internet access. They install `datasets` and write the script with `%%writefile`. The equivalent command lines are:
+**Fine-tuning experiments (GPU).** Run the notebooks on Kaggle with two T4 GPUs and internet access. They install `datasets` (and, for E9, `peft`) and write the script with `%%writefile`. The equivalent command lines are:
 
 ```
 # E4: six normalisers, 32 answers per update, seeds 0 and 1
@@ -52,12 +54,15 @@ python experiments/e4_finetune.py --parallel --tag e7 --methods global fixed --n
 
 # E8 (pre-registered): constant divisor vs global, 4 answers per update
 python experiments/e4_finetune.py --parallel --tag e8 --methods global fixed --group 4 --lr 3.5e-5 --n-gen 1000 --seeds 200 201 202 203 204 205 206 207
+
+# E9 (pre-registered, with its amendment): TinyLlama-1.1B, LoRA rank 16, Dolly, full-precision training
+python experiments/e4_finetune.py --parallel --tag e9 --model TinyLlama/TinyLlama_v1.1 --dataset dolly --lora-r 16 --grad-ckpt --lr 2e-4 --train-fp32 --methods micro1 micro4 fixed --epochs 1 --n-train 6000 --n-gen 1000 --seeds 300 301 302 303
 ```
 
-Then put the merged `*_results.jsonl` files in `results/` and run `analyse_e4.py`, `analyse_e7.py` and `analyse_e8.py`.
+Then put the merged `*_results.jsonl` files in `results/` and run `analyse_e4.py`, `analyse_e7.py`, `analyse_e8.py` and `analyse_e9.py`.
 
 In the code, `fixed` is the constant divisor A/(B·μ) and `global` is division by the batch token count.
 
 ## Pre-registration
 
-The files `results/e5_e6_preregistration.txt`, `results/e7_preregistration.txt` and `results/e8_preregistration.txt` were written before any run of the experiments they describe. Later additions are marked as post hoc inside the files. E1, E2 and E4 were not pre-registered.
+The files `results/e5_e6_preregistration.txt`, `results/e7_preregistration.txt`, `results/e8_preregistration.txt` and `results/e9_preregistration.txt` were written before any run of the experiments they describe. Later additions are marked as post hoc inside the files. E9's file ends with a dated amendment (full-precision training, 6,000 training answers), written after three failed smoke tests and before any E9 run trained or produced a result. E1, E2 and E4 were not pre-registered.
